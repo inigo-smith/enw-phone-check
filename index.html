@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone check</title>
+<!--
+  ENW-PHONE-CHECK-01 — Wren's phone check (ENW-PROMOTION-MODEL ruling §13).
+  One page, no network: everything happens on the phone. Nothing is uploaded or stored.
+  Mechanisms are the ones the real Promote page will use (§5, §7):
+    - the sample picture is drawn on a canvas and turned into a File when the page opens,
+      so the Share tap has the file in hand and calls share with no wait in between;
+    - each chosen photo is decoded with createImageBitmap (which applies the camera's rotation),
+      drawn at 2160 on the long side and saved as JPEG at quality 0.82.
+    - Safari's canvas JPEG still carries a small Exif block of its own (colour space and size;
+      measured in WebKit 2026-11-07), so the page removes every APPn block but APP0 and APP2
+      from the bytes and reports what the phone's own copy held.
+-->
+<style>
+  :root {
+    --bg: #f7f4ef; --card: #ffffff; --ink: #1f2a26; --muted: #5b6662;
+    --line: #ddd6cc; --accent: #2f6b57; --accent-ink: #ffffff;
+    --good: #23704a; --bad: #a3321f;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141917; --card: #1e2522; --ink: #eef2ef; --muted: #a9b5b0;
+      --line: #34403b; --accent: #7cc4a6; --accent-ink: #0d1a14;
+      --good: #7fd3a5; --bad: #ff9b88;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141917; --card: #1e2522; --ink: #eef2ef; --muted: #a9b5b0;
+    --line: #34403b; --accent: #7cc4a6; --accent-ink: #0d1a14;
+    --good: #7fd3a5; --bad: #ff9b88;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 18px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  h2 { font-size: 20px; margin: 0 0 10px; }
+  p { margin: 0 0 10px; }
+  .lead { color: var(--muted); }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 16px; margin-top: 16px;
+  }
+  .step { font-size: 14px; font-weight: 600; letter-spacing: .04em; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+  #sample { display: block; width: 45%; max-width: 200px; height: auto; border-radius: 10px; border: 1px solid var(--line); margin: 4px auto 14px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; width: 100%;
+    min-height: 60px; padding: 12px 18px; border: 0; border-radius: 14px;
+    background: var(--accent); color: var(--accent-ink);
+    font: inherit; font-size: 20px; font-weight: 600; cursor: pointer;
+  }
+  .btn[disabled] { opacity: .5; }
+  .file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  .file:focus-visible + .btn { outline: 3px solid var(--ink); outline-offset: 3px; }
+  .status { margin-top: 10px; min-height: 1.45em; }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  ol.checks { margin: 0; padding-left: 1.3em; }
+  ol.checks li { margin-bottom: 10px; }
+  .result { display: flex; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+  .result canvas { flex: none; width: 72px; height: auto; border-radius: 8px; border: 1px solid var(--line); align-self: flex-start; }
+  .result ul { list-style: none; margin: 0; padding: 0; min-width: 0; }
+  .result li { overflow-wrap: anywhere; }
+  .result .name { font-weight: 600; }
+  .result .muted { color: var(--muted); font-size: 15px; margin-top: 4px; }
+  .note { font-size: 16px; color: var(--muted); margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Phone check</h1>
+  <p class="lead">This page sends nothing anywhere. Any photo you choose stays on this phone.
+    Please screen-record while you go through it. About ten minutes.</p>
+
+  <section class="card" aria-labelledby="h-share">
+    <div class="step">Step 1</div>
+    <h2 id="h-share">Share a sample picture</h2>
+    <canvas id="sample" width="1080" height="1920" aria-label="Sample picture"></canvas>
+    <button id="share" class="btn" type="button" disabled>Getting the picture ready…</button>
+    <p id="share-status" class="status" role="status"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-look">
+    <div class="step">Steps 2 to 4</div>
+    <h2 id="h-look">What to look for</h2>
+    <ol class="checks">
+      <li>In the list that opens, is <b>Instagram</b> there? Tap it. Can you choose <b>Stories</b>? Can you choose <b>Feed</b>?</li>
+      <li>Go back and tap Share again. Is <b>WhatsApp</b> there? Tap it. Can you see <b>your groups</b>?</li>
+      <li>Tapping Share also copied some words. In Instagram, add a <b>Link</b> sticker and paste into it.
+        In a WhatsApp group, paste into the message box. Do the words appear? (You don't need to send it.)</li>
+    </ol>
+  </section>
+
+  <section class="card" aria-labelledby="h-photos">
+    <div class="step">Step 5</div>
+    <h2 id="h-photos">Choose three photos</h2>
+    <p>Pick three photos from your library. Make one of them a photo you took with the camera as normal.</p>
+    <input id="photos" class="file" type="file" accept="image/*" multiple>
+    <label for="photos" class="btn" id="photos-label">Choose photos</label>
+    <div id="results" aria-live="polite"></div>
+  </section>
+
+  <p class="note">When you've finished, stop the screen recording and send it to Douglas.</p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  // Made-up sample words. Not a real address; nothing is fetched.
+  const CAPTION = 'Gentle yoga this Thursday 7pm — eastneukwellness.example/try';
+  const LONG_SIDE = 2160;
+  const QUALITY = 0.82;
+  const MAX_BYTES = 2 * 1024 * 1024;
+
+  const state = { sampleFile: null, results: [] };
+  window.__phoneCheck = state; // read by the test script only
+
+  const $ = (id) => document.getElementById(id);
+  const shareBtn = $('share');
+  const shareStatus = $('share-status');
+
+  const toBlob = (canvas) => new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', QUALITY));
+
+  function drawSample(canvas) {
+    const c = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#2f6b57');
+    g.addColorStop(1, '#d9b98c');
+    c.fillStyle = g;
+    c.fillRect(0, 0, w, h);
+    c.fillStyle = 'rgba(255,255,255,.18)';
+    c.beginPath(); c.arc(w * 0.78, h * 0.2, 260, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffffff';
+    c.textAlign = 'center';
+    c.font = '600 92px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    c.fillText('Gentle yoga', w / 2, h * 0.44);
+    c.font = '400 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    c.fillText('Thursday 7pm', w / 2, h * 0.44 + 110);
+    c.font = '400 44px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    c.fillText('Sample picture · phone check', w / 2, h * 0.9);
+  }
+
+  async function prepareSample() {
+    // The real page waits for its own fonts (Wren §5). This page uses only the phone's
+    // built-in font, so waiting for the font set to settle is enough.
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas = $('sample');
+    drawSample(canvas);
+    const blob = await toBlob(canvas);
+    if (!blob) { shareBtn.textContent = 'This phone could not make the picture'; return; }
+    state.sampleFile = new File([blob], 'phone-check-sample.jpg', { type: 'image/jpeg' });
+    shareBtn.textContent = 'Share';
+    shareBtn.disabled = false;
+  }
+
+  function line(el, text, ok) {
+    el.textContent = text;
+    el.className = 'status ' + (ok ? 'good' : 'bad');
+  }
+
+  // One tap does both, with no wait in between: Safari only lets a page share or copy
+  // straight after a tap, and a wait (for example for a download) can lose that.
+  shareBtn.addEventListener('click', () => {
+    const file = state.sampleFile;
+    if (!file) return;
+
+    let copied;
+    try { copied = navigator.clipboard.writeText(CAPTION); }
+    catch (e) { copied = Promise.reject(e); }
+
+    const data = { files: [file] };
+    let shared;
+    if (!navigator.share || (navigator.canShare && !navigator.canShare(data))) {
+      shared = Promise.reject(new Error('cannot-share'));
+    } else {
+      try { shared = navigator.share(data); }
+      catch (e) { shared = Promise.reject(e); }
+    }
+
+    const parts = { copy: null, share: null };
+    const show = () => {
+      if (parts.copy === null || parts.share === null) return;
+      const copyText = parts.copy ? 'Words copied ✓' : 'Words NOT copied ✗';
+      const shareText = {
+        ok: 'Share list opened ✓',
+        closed: 'Share list opened and closed ✓',
+        no: 'This phone would not share the picture ✗',
+      }[parts.share];
+      line(shareStatus, copyText + ' · ' + shareText, parts.copy && parts.share !== 'no');
+    };
+    copied.then(() => { parts.copy = true; show(); }, () => { parts.copy = false; show(); });
+    shared.then(() => { parts.share = 'ok'; show(); },
+      (e) => { parts.share = (e && e.name === 'AbortError') ? 'closed' : 'no'; show(); });
+  });
+
+  // Finds an APP1 block (where Exif and location live) before the picture data starts.
+  function hasApp1(bytes) {
+    if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return true; // not a JPEG at all: treat as not clean
+    let i = 2;
+    while (i + 4 <= bytes.length) {
+      if (bytes[i] !== 0xFF) return true; // unexpected layout: treat as not clean
+      const marker = bytes[i + 1];
+      if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01 || marker === 0xFF) { i += marker === 0xFF ? 1 : 2; continue; }
+      if (marker === 0xDA || marker === 0xD9) return false; // picture data starts: no APP1 found
+      if (marker === 0xE1) return true;
+      i += 2 + ((bytes[i + 2] << 8) | bytes[i + 3]);
+    }
+    return false;
+  }
+
+  // Safari's canvas adds a small Exif block of its own (colour space and size, measured in WebKit
+  // 2026-11-07). Reads the first-level entries of that block, so the screen can say whether the
+  // phone put a location (0x8825) or a camera name (0x010F, 0x0110) or a date (0x0132) in it.
+  function app1Tags(bytes) {
+    let i = 2;
+    while (i + 4 <= bytes.length && bytes[i] === 0xFF) {
+      const m = bytes[i + 1], len = (bytes[i + 2] << 8) | bytes[i + 3];
+      if (m === 0xDA) break;
+      if (m === 0xE1 && bytes[i + 4] === 0x45 && bytes[i + 5] === 0x78) { // "Ex"if
+        const t = i + 10, le = bytes[t] === 0x49;
+        const u16 = (o) => le ? bytes[o] | (bytes[o + 1] << 8) : (bytes[o] << 8) | bytes[o + 1];
+        const u32 = (o) => le ? (bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24)) >>> 0
+                              : ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
+        const ifd = t + u32(t + 4), n = u16(ifd), tags = [];
+        for (let k = 0; k < n && ifd + 2 + k * 12 + 2 <= bytes.length; k++) tags.push(u16(ifd + 2 + k * 12));
+        return tags;
+      }
+      i += 2 + len;
+    }
+    return [];
+  }
+
+  // Keeps the picture, its JFIF header and its colour profile (APP0, APP2); drops every other
+  // APPn block (Exif, XMP, Photoshop) before the picture data. This is what makes the result clean.
+  function stripExtras(bytes) {
+    const keep = [bytes.subarray(0, 2)];
+    let i = 2;
+    while (i + 4 <= bytes.length && bytes[i] === 0xFF) {
+      const m = bytes[i + 1];
+      if (m === 0xDA) break;
+      const end = i + 2 + ((bytes[i + 2] << 8) | bytes[i + 3]);
+      const isApp = m >= 0xE0 && m <= 0xEF;
+      if (!isApp || m === 0xE0 || m === 0xE2) keep.push(bytes.subarray(i, end));
+      i = end;
+    }
+    keep.push(bytes.subarray(i));
+    return new Blob(keep, { type: 'image/jpeg' });
+  }
+
+  function typeName(file) {
+    const t = (file.type || '').toLowerCase();
+    const named = {
+      'image/heic': 'HEIC (iPhone High Efficiency)',
+      'image/heif': 'HEIF (iPhone High Efficiency)',
+      'image/jpeg': 'JPEG', 'image/png': 'PNG', 'image/gif': 'GIF', 'image/webp': 'WebP',
+    }[t];
+    if (named) return named;
+    if (t) return t;
+    const ext = (file.name.split('.').pop() || '').toUpperCase();
+    return ext ? 'not given (name ends .' + ext + ')' : 'not given';
+  }
+
+  async function decode(file) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+    catch (e) {
+      if (e && e.name === 'TypeError') return await createImageBitmap(file); // older browsers without options
+      throw e;
+    }
+  }
+
+  async function checkPhoto(file, n) {
+    const row = document.createElement('div');
+    row.className = 'result';
+    const thumb = document.createElement('canvas');
+    const list = document.createElement('ul');
+    const add = (text, cls) => { const li = document.createElement('li'); li.textContent = text; if (cls) li.className = cls; list.appendChild(li); return li; };
+    add('Photo ' + n, 'name');
+    const result = { name: file.name, type: file.type, typeShown: typeName(file) };
+    add('Type: ' + result.typeShown);
+    row.append(thumb, list);
+    $('results').appendChild(row);
+    state.results.push(result);
+
+    let bitmap;
+    try { bitmap = await decode(file); }
+    catch (e) {
+      result.failed = true;
+      add('This phone could not open this photo ✗ Nothing was sent.', 'bad');
+      thumb.remove();
+      return;
+    }
+
+    const scale = Math.min(1, LONG_SIDE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    if (bitmap.close) bitmap.close();
+
+    const raw = await toBlob(canvas);
+    if (!raw) { result.failed = true; add('This phone could not save the smaller copy ✗', 'bad'); thumb.remove(); return; }
+    const rawBytes = new Uint8Array(await raw.arrayBuffer());
+    const rawTags = app1Tags(rawBytes);
+    const blob = stripExtras(rawBytes);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    Object.assign(result, {
+      blob, width: w, height: h, size: blob.size, app1: hasApp1(bytes),
+      phoneAddedBlock: hasApp1(rawBytes), phoneAddedTags: rawTags,
+      phoneAddedPrivate: rawTags.some((t) => [0x8825, 0x010F, 0x0110, 0x0132].includes(t)),
+    });
+
+    add(Math.max(w, h) === LONG_SIDE
+      ? 'Made smaller: ' + w + ' × ' + h + ' (2160 on the long side) ✓'
+      : 'Kept at ' + w + ' × ' + h + ' (already smaller than 2160) ✓', 'good');
+    const mb = (blob.size / (1024 * 1024)).toFixed(2);
+    add(blob.size < MAX_BYTES ? 'Size: ' + mb + ' MB, under 2 MB ✓' : 'Size: ' + mb + ' MB, too big ✗',
+      blob.size < MAX_BYTES ? 'good' : 'bad');
+    add(result.app1 ? 'Location and camera details still in it ✗' : 'Location and camera details removed ✓',
+      result.app1 ? 'bad' : 'good');
+    // For Douglas, from the recording: what the phone's own copy held before this page cleaned it.
+    add('For Douglas: the phone\'s own copy ' + (result.phoneAddedBlock
+      ? (result.phoneAddedPrivate ? 'had location, camera or date in it' : 'had a small details block, with no location, camera or date')
+      : 'was already clean'), 'muted');
+
+    thumb.width = 144; thumb.height = Math.round(144 * h / w);
+    thumb.getContext('2d').drawImage(canvas, 0, 0, thumb.width, thumb.height);
+  }
+
+  $('photos').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    $('results').textContent = '';
+    state.results = [];
+    state.done = false;
+    for (let i = 0; i < files.length; i++) await checkPhoto(files[i], i + 1); // one at a time: one failure loses nothing else
+    state.done = true;
+  });
+
+  prepareSample();
+})();
+</script>
+</body>
+</html>
